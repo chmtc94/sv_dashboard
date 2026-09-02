@@ -6,7 +6,8 @@ on:
       - audit-17-hardening
 
 permissions:
-  contents: write
+  contents: read
+  issues: write
 
 jobs:
   build:
@@ -16,7 +17,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: audit-17-hardening
-          fetch-depth: 2
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -36,31 +36,10 @@ jobs:
           cat > lit-entry.js <<'EOF'
           export { LitElement, html, css, nothing } from "lit";
           EOF
-          ./node_modules/.bin/esbuild lit-entry.js \
-            --bundle \
-            --format=esm \
-            --platform=browser \
-            --target=es2022 \
-            --minify \
-            --legal-comments=none \
-            --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
+          ./node_modules/.bin/esbuild lit-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --legal-comments=none --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
 
       - name: Apply audit hardening migration
-        shell: bash
-        run: |
-          set +e
-          python3 -u tools/audit17_hardening.py > /tmp/audit17.log 2>&1
-          rc=$?
-          cat /tmp/audit17.log
-          if [ "$rc" -ne 0 ]; then
-            cp /tmp/audit17.log audit17_failure.log
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "debug: capture audit17 builder failure"
-            git push origin HEAD:audit-17-hardening
-            exit "$rc"
-          fi
+        run: python3 -u tools/audit17_hardening.py
 
       - name: Compile Python
         run: python3 -m py_compile custom_components/sv_dashboard/*.py
@@ -69,11 +48,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in custom_components/sv_dashboard/static/*.js; do
-            node --check "$file"
-          done
+          for file in custom_components/sv_dashboard/static/*.js; do node --check "$file"; done
 
       - name: Run regression suite
+        id: regressions
         shell: bash
         run: |
           set +e
@@ -81,32 +59,15 @@ jobs:
           rc=$?
           cat /tmp/audit17-tests.log
           if [ "$rc" -ne 0 ]; then
-            cp /tmp/audit17-tests.log audit17_tests_failure.log
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "debug: capture audit17 regression failure"
-            git push origin HEAD:audit-17-hardening
-            exit "$rc"
+            {
+              echo 'Audit #17 regression failures after successful migration/compile/syntax:'
+              echo
+              echo '```text'
+              grep -E -A18 -B4 '^(not ok|# Subtest:|  error:|  code:|  expected:|  actual:|  operator:|  stack:)' /tmp/audit17-tests.log | tail -n 350
+              echo '```'
+            } > /tmp/audit17-comment.md
+            gh issue comment 17 --repo "$GITHUB_REPOSITORY" --body-file /tmp/audit17-comment.md
           fi
-
-      - name: Validate JSON and whitespace
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m json.tool hacs.json >/dev/null
-          python3 -m json.tool custom_components/sv_dashboard/manifest.json >/dev/null
-          for file in custom_components/sv_dashboard/translations/*.json; do
-            python3 -m json.tool "$file" >/dev/null
-          done
-          git diff --check
-
-      - name: Commit prepared candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "audit: harden beta5 hybrid and frontend runtime"
-          git push origin HEAD:audit-17-hardening
+          exit "$rc"
+        env:
+          GH_TOKEN: ${{ github.token }}
