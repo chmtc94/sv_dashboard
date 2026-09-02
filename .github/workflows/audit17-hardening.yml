@@ -37,7 +37,7 @@ jobs:
           cat > lit-entry.js <<'EOF'
           export { LitElement, html, css, nothing } from "lit";
           EOF
-          ./node_modules/.bin/esbuild lit-entry.js --bundle --format=esm --platform=browser --target=es2022 --legal-comments=none --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
+          ./node_modules/.bin/esbuild lit-entry.js --bundle --format=esm --platform=browser --target=es2022 --supported:template-literal=false --legal-comments=none --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
 
       - name: Apply audit hardening migration
         run: python3 -u tools/audit17_hardening.py
