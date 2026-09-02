@@ -1,0 +1,84 @@
+name: Audit 17 hardening builder
+
+on:
+  push:
+    branches:
+      - audit-17-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: audit-17-hardening
+          fetch-depth: 2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Bundle pinned Lit locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sv-lit
+          mkdir -p /tmp/sv-lit
+          cd /tmp/sv-lit
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-save lit@3.3.1 esbuild@0.25.9 >/dev/null
+          cat > lit-entry.js <<'EOF'
+          export { LitElement, html, css, nothing } from "lit";
+          EOF
+          ./node_modules/.bin/esbuild lit-entry.js \
+            --bundle \
+            --format=esm \
+            --platform=browser \
+            --target=es2022 \
+            --minify \
+            --legal-comments=none \
+            --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
+
+      - name: Apply audit hardening migration
+        run: python3 tools/audit17_hardening.py
+
+      - name: Compile Python
+        run: python3 -m py_compile custom_components/sv_dashboard/*.py
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in custom_components/sv_dashboard/static/*.js; do
+            node --check "$file"
+          done
+
+      - name: Run regression suite
+        run: node --test tests/*.test.mjs
+
+      - name: Validate JSON and whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool hacs.json >/dev/null
+          python3 -m json.tool custom_components/sv_dashboard/manifest.json >/dev/null
+          for file in custom_components/sv_dashboard/translations/*.json; do
+            python3 -m json.tool "$file" >/dev/null
+          done
+          git diff --check
+
+      - name: Commit prepared candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "audit: harden beta5 hybrid and frontend runtime"
+          git push origin HEAD:audit-17-hardening
