@@ -186,10 +186,11 @@ audit += (
 audit_path.write_text(audit, encoding="utf-8")
 
 
-# Final source contract: the removed catalog cannot be referenced anywhere
-# relevant to the package or its validation suite.
-for path in [*STATIC.glob("*.js"), *TESTS.glob("*.mjs"), validate_path, loc_path]:
+# Final runtime contract: no package JavaScript or validation workflow may still
+# load the deleted split catalog. The regression test may mention its name to
+# assert that the file is absent.
+for path in [*STATIC.glob("*.js"), validate_path]:
     if "i18n-hybrid-cards.js" in path.read_text(encoding="utf-8"):
-        raise RuntimeError(f"Split catalog reference remains in {path}")
+        raise RuntimeError(f"Split catalog runtime reference remains in {path}")
 
 print("Audit #17 postprocessing complete")
