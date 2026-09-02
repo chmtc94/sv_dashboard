@@ -46,7 +46,21 @@ jobs:
             --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
 
       - name: Apply audit hardening migration
-        run: python3 tools/audit17_hardening.py
+        shell: bash
+        run: |
+          set +e
+          python3 -u tools/audit17_hardening.py > /tmp/audit17.log 2>&1
+          rc=$?
+          cat /tmp/audit17.log
+          if [ "$rc" -ne 0 ]; then
+            cp /tmp/audit17.log audit17_failure.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add audit17_failure.log
+            git commit -m "debug: capture audit17 builder failure"
+            git push origin HEAD:audit-17-hardening
+            exit "$rc"
+          fi
 
       - name: Compile Python
         run: python3 -m py_compile custom_components/sv_dashboard/*.py
