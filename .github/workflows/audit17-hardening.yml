@@ -37,7 +37,7 @@ jobs:
           cat > lit-entry.js <<'EOF'
           export { LitElement, html, css, nothing } from "lit";
           EOF
-          ./node_modules/.bin/esbuild lit-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --legal-comments=none --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
+          ./node_modules/.bin/esbuild lit-entry.js --bundle --format=esm --platform=browser --target=es2022 --legal-comments=none --outfile="$GITHUB_WORKSPACE/custom_components/sv_dashboard/static/vendor-lit.js"
 
       - name: Apply audit hardening migration
         run: python3 -u tools/audit17_hardening.py
@@ -88,7 +88,7 @@ jobs:
           set -euo pipefail
           git config user.name "CaneTLOTW"
           git config user.email "35076818+CaneTLOTW@users.noreply.github.com"
-          git fetch origin develop
+          git fetch origin develop audit-17-candidate
 
           # Debug/build machinery belongs only to audit-17-hardening and must not
           # be present in the product candidate.
@@ -99,18 +99,21 @@ jobs:
             tools/audit17_assertion_sync.py
 
           # Keep the established Validate workflow byte-for-byte from develop.
-          # The audit builder already syntax-checks every generated JS file; the
-          # product candidate does not need a workflow-file mutation.
           git checkout origin/develop -- .github/workflows/validate.yaml
           git add -A
 
           parent="$(git rev-parse origin/develop)"
+          previous_candidate="$(git rev-parse origin/audit-17-candidate)"
           if git diff --cached --quiet "$parent"; then
             echo "No candidate changes relative to develop" >&2
             exit 1
           fi
 
+          # Match the repository's normal whitespace gate before publishing the
+          # candidate so generated vendor code cannot bypass it.
+          git diff --cached --check "$parent"
+
           tree="$(git write-tree)"
           commit="$(printf '%s\n' 'feat: harden multi-powertrain runtime and frontend' | git commit-tree "$tree" -p "$parent")"
-          git push origin "$commit:refs/heads/audit-17-candidate"
+          git push --force-with-lease="refs/heads/audit-17-candidate:$previous_candidate" origin "$commit:refs/heads/audit-17-candidate"
           echo "Candidate commit: $commit"
