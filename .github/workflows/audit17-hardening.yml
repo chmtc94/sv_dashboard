@@ -60,10 +60,13 @@ jobs:
           cat /tmp/audit17-tests.log
           if [ "$rc" -ne 0 ]; then
             {
-              echo 'Audit #17 regression failures after successful migration/compile/syntax:'
+              echo 'Audit #17 failing regression names:'
               echo
               echo '```text'
-              grep -E -A18 -B4 '^(not ok|# Subtest:|  error:|  code:|  expected:|  actual:|  operator:|  stack:)' /tmp/audit17-tests.log | tail -n 350
+              grep '^not ok' /tmp/audit17-tests.log || true
+              echo
+              echo 'Failure details:'
+              awk '/^not ok/{show=1; n=0} show{print; n++} show && n>=16{show=0}' /tmp/audit17-tests.log
               echo '```'
             } > /tmp/audit17-comment.md
             gh issue comment 17 --repo "$GITHUB_REPOSITORY" --body-file /tmp/audit17-comment.md
