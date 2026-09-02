@@ -97,6 +97,11 @@ jobs:
             tools/audit17_hardening.py \
             tools/audit17_postprocess.py \
             tools/audit17_assertion_sync.py
+
+          # Keep the established Validate workflow byte-for-byte from develop.
+          # The audit builder already syntax-checks every generated JS file; the
+          # product candidate does not need a workflow-file mutation.
+          git checkout origin/develop -- .github/workflows/validate.yaml
           git add -A
 
           parent="$(git rev-parse origin/develop)"
