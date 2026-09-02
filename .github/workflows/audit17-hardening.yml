@@ -44,6 +44,9 @@ jobs:
       - name: Canonicalize catalogs and final UI contracts
         run: python3 -u tools/audit17_postprocess.py
 
+      - name: Align regression assertions with final contracts
+        run: python3 -u tools/audit17_assertion_sync.py
+
       - name: Compile Python
         run: python3 -m py_compile custom_components/sv_dashboard/*.py
 
