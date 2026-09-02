@@ -6,7 +6,7 @@ on:
       - audit-17-hardening
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: audit-17-hardening
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -80,3 +81,31 @@ jobs:
           exit "$rc"
         env:
           GH_TOKEN: ${{ github.token }}
+
+      - name: Materialize clean candidate from develop parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "CaneTLOTW"
+          git config user.email "35076818+CaneTLOTW@users.noreply.github.com"
+          git fetch origin develop
+
+          # Debug/build machinery belongs only to audit-17-hardening and must not
+          # be present in the product candidate.
+          git rm -f \
+            .github/workflows/audit17-hardening.yml \
+            tools/audit17_hardening.py \
+            tools/audit17_postprocess.py \
+            tools/audit17_assertion_sync.py
+          git add -A
+
+          parent="$(git rev-parse origin/develop)"
+          if git diff --cached --quiet "$parent"; then
+            echo "No candidate changes relative to develop" >&2
+            exit 1
+          fi
+
+          tree="$(git write-tree)"
+          commit="$(printf '%s\n' 'feat: harden multi-powertrain runtime and frontend' | git commit-tree "$tree" -p "$parent")"
+          git push origin "$commit:refs/heads/audit-17-candidate"
+          echo "Candidate commit: $commit"
