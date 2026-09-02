@@ -56,7 +56,7 @@ jobs:
             cp /tmp/audit17.log audit17_failure.log
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add audit17_failure.log
+            git add -A
             git commit -m "debug: capture audit17 builder failure"
             git push origin HEAD:audit-17-hardening
             exit "$rc"
@@ -74,7 +74,21 @@ jobs:
           done
 
       - name: Run regression suite
-        run: node --test tests/*.test.mjs
+        shell: bash
+        run: |
+          set +e
+          node --test tests/*.test.mjs > /tmp/audit17-tests.log 2>&1
+          rc=$?
+          cat /tmp/audit17-tests.log
+          if [ "$rc" -ne 0 ]; then
+            cp /tmp/audit17-tests.log audit17_tests_failure.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "debug: capture audit17 regression failure"
+            git push origin HEAD:audit-17-hardening
+            exit "$rc"
+          fi
 
       - name: Validate JSON and whitespace
         shell: bash
